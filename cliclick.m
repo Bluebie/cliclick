@@ -27,6 +27,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <time.h>
 #import <Cocoa/Cocoa.h>
@@ -116,7 +117,7 @@ int main (int argc, const char * argv[]) {
             [pool release];
             return EXIT_FAILURE;
         }
-        if (![fm fileExistsAtPath:filepath]) {
+        if (![fm fileExistsAtPath:filepath] && ![filepath isEqualToString:@"-"]) {
             printf("There is no file at %s\n", [filepath UTF8String]);
             [pool release];
             return EXIT_FAILURE;
@@ -156,8 +157,39 @@ int main (int argc, const char * argv[]) {
     return EXIT_SUCCESS;
 }
 
+NSString* parseCommandFromString(NSString *string) {
+    NSString *command = [string stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    if ([command isEqualToString:@""]) {
+        return nil;
+    }
+    if ([[command substringToIndex:1] isEqualToString:@"#"]) {
+        return nil;
+    }
+    return command;
+}
+
 NSArray* parseCommandsFile(NSString *filepath) {
     NSMutableArray *commands = [[NSMutableArray alloc] initWithCapacity:32];
+    
+    if ([filepath isEqualToString:@"-"]) {
+        // streaming mode
+        char cmdBuffer[32];
+        while (fgets(cmdBuffer, sizeof(cmdBuffer), stdin)) {
+            NSString* nsLineBuffer = [NSString stringWithCString:cmdBuffer encoding:NSUTF8StringEncoding];
+            NSString* command = parseCommandFromString(nsLineBuffer);
+            @try {
+                [ActionExecutor executeActions:@[command]
+                                        inMode:MODE_REGULAR
+                           waitingMilliseconds:0];
+            }
+            @catch (NSException *e) {
+                printf("%s\n", [[e reason] UTF8String]);
+            }
+        }
+        
+        return [commands autorelease];
+    }
+    
     NSString *fileContents = [NSString stringWithContentsOfFile:filepath
                                                        encoding:NSUTF8StringEncoding
                                                           error:nil];
@@ -165,14 +197,10 @@ NSArray* parseCommandsFile(NSString *filepath) {
 
     NSUInteger i, count = [lines count];
     for (i = 0; i < count; i++) {
-        NSString *command = [[lines objectAtIndex:i] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        if ([command isEqualToString:@""]) {
-            continue;
+        NSString *command = parseCommandFromString([lines objectAtIndex:i]);
+        if (command != nil) {
+            [commands addObject:command];
         }
-        if ([[command substringToIndex:1] isEqualToString:@"#"]) {
-            continue;
-        }
-        [commands addObject:command];
     }
 
     return [commands autorelease];
