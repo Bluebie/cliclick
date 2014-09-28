@@ -173,9 +173,10 @@ NSArray* parseCommandsFile(NSString *filepath) {
     
     if ([filepath isEqualToString:@"-"]) {
         // streaming mode
-        char cmdBuffer[32];
+        char cmdBuffer[500];
         while (fgets(cmdBuffer, sizeof(cmdBuffer), stdin)) {
-            NSString* nsLineBuffer = [NSString stringWithCString:cmdBuffer encoding:NSUTF8StringEncoding];
+            cmdBuffer[strlen(cmdBuffer) - 1] = 0; // remove trailing newline
+            NSString* nsLineBuffer = [NSString stringWithUTF8String:cmdBuffer];
             NSString* command = parseCommandFromString(nsLineBuffer);
             @try {
                 [ActionExecutor executeActions:@[command]
